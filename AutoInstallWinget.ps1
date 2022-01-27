@@ -41,16 +41,29 @@ $PackageParams = @{
 
 }
 
+$PythonLibs = @(
+    'numpy', 
+    'scipy', 
+    'python-dotenv', 
+    'psycopg2', 
+    'nuitka'
+)
+
 # Functions
-function Logger{
+function Logger {
     param(
+        [parameter(ValueFromPipeline=$true, Mandatory=$false)]$piped,
         [string]$Message
     )
-    $Message | Out-File -FilePath $Log -Append
-    Write-Host $Message
+    if(!$piped){
+        $Message | Tee-Object -File $Log -Append | Write-Host
+    }
+    else{
+        $piped | Tee-Object -File $Log -Append | Write-Host
+    }
 }
 
-function Install-Package-ScriptBlock {
+function Install-Package-Command-String {
     param (
         [string]$Package, 
         [string]$Source,
@@ -73,6 +86,7 @@ function Install-Package-ScriptBlock {
     # Before Adding Default Parameters, create the CheckInstallString
     $CheckInstallString = "winget list -q " + $QueryString + "| Out-String -Stream"
 
+    # Add Default Installer Parameters
     if($OtherParameters -ne $null){
         ForEach($Option in $OtherParameters.Keys){
             $QueryString = $QueryString + " " + $Option + " " + $OtherParameters[$Option]
@@ -104,6 +118,61 @@ function Install-Package-ScriptBlock {
 }
 
 function Install-From-Hashes {
+    param(
+        [hashtable]$Programs
+    )
+    
+    $Jobs = foreach($Package in $Programs.Keys){   
+    
+        if($PackageParams[$Package] -eq $null) {
+            $blockstring = Install-Package-Command-String `
+                -Package $Package `
+                -Source $MainPrograms[$Package] `
+                -OtherParameters $DefaultOptionsHash;
+        }
+        else {
+            $blockstring = Install-Package-Command-String `
+                -Package $Package `
+                -Source $MainPrograms[$Package] `
+                -PackageParams $PackageParams[$Package] `
+                -OtherParameters $DefaultOptionsHash;
+        }
+
+        $scriptBlock = [Scriptblock]::Create($blockstring);
+        Start-Job -ScriptBlock $scriptBlock
+    }
+    
+    # Wait For all Install Jobs to Finish
+    $tisofbpttop = Wait-Job $Jobs
+    
+    $ResultLogRequired = 1;
+
+    foreach ($Job in $Jobs){
+        $Output = Receive-Job $Job
+    
+        # Skipped Install
+        if($Output -eq $null){
+            continue;
+        }
+        
+        $ResultLogRequired = 0;
+        if(-not $ResultLogRequired){
+            Logger -Message "`r`nResult Log: "
+        }
+
+        # Multiple Lines in Output - Use last line for status
+        if($Output -is [Array]){
+            $Output = $Output[-1];
+        }
+        if($Output.Contains("Successfully installed")){
+            $ResultLog = "Successful"
+        }
+        else {
+            $ResultLog = "Failed"
+        }
+        
+        Logger -Mesage $ResultLog
+    }
 }
 
 #############################
@@ -111,55 +180,25 @@ function Install-From-Hashes {
 #############################
 
 Logger -Message "Installing Required Programs.. "
+Install-From-Hashes -Programs $MainPrograms
 
-$Jobs = foreach($Package in $MainPrograms.Keys){   
-    
-    if($PackageParams[$Package] -eq $null) {
-        $blockstring = Install-Package-ScriptBlock `
-            -Package $Package `
-            -Source $MainPrograms[$Package] `
-            -OtherParameters $DefaultOptionsHash;
-    }
-    else {
-        $blockstring = Install-Package-ScriptBlock `
-            -Package $Package `
-            -Source $MainPrograms[$Package] `
-            -PackageParams $PackageParams[$Package] `
-            -OtherParameters $DefaultOptionsHash;
-    }
+############################
+# Install Python Libraries #
+############################
 
-    $scriptBlock = [Scriptblock]::Create($blockstring);
-    Start-Job -ScriptBlock $scriptBlock
-}
+Logger -Message "Installing Python Libraries.."
+Logger -Message "Updating Session PATH.."
 
-# Wait For all Install Jobs to Finish
-Logger -Message "`r`nResult Log: "
-$tisofbpttop = Wait-Job $Jobs
-
-foreach ($Job in $Jobs){
-    $Output = Receive-Job $Job
-    if(($Output -ne $null) -and ($Output -is [Array])){
-        $Output = $Output[-1];
-    }
-    
-    if($Output.Contains("Successfully installed")){
-        $ResultLog = "Successful"
-    }
-    else {
-        if($Output.Contains("skipping")){
-            $ResultLog = $item
-        }
-        else {
-            $ResultLog = "Failed"
-        }
-    }
-    Logger -Mesage $ResultLog
-}
-
-<#
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
 
-# Python Library installs
-pip install numpy scipy python-dotenv psycopg2 nuitka
+Logger -Message "using Pip to install.."
+foreach($PythonLib in $PythonLibs){
+    pip install $PythonLib | Logger
+}
 
-#>
+##############################
+# Install Secondary Programs #
+##############################
+
+Logger -Message "Installing Secondary Programs.. "
+Install-From-Hashes -Programs $SecondaryPrograms
