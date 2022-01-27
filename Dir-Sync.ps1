@@ -1,9 +1,16 @@
-﻿$ErrorActionPreference = "Stop";
+﻿# Requirements: dirsync via python or an executable on path
+param (
+    [string]$purge,
+    [double]$InitSleep
+)
+
+$ErrorActionPreference = "Stop";
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
 $DefaultLog = "$env:USERPROFILE/AutoDirSync.log"
 
-# Requirements: dirsync via python or an executable on path
+#######################################
+# Logging
 
 function Logger {
     param(
@@ -19,6 +26,7 @@ function Logger {
 
 #######################################
 # Get/Set Target and Sources
+
 try{
     $TargetDrive = (Get-Volume -FileSystemLabel Archit).DriveLetter + ":"
     $TargetLog = "$TargetDrive/AutoDirSync.log"
@@ -37,43 +45,87 @@ $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
 
 #######################################
 # Set Tasks and Options
-$DefaultOptions = @("--verbose", "--diff", "")
+
+$DefaultOptions = @("--verbose", "--diff")
+if($purge -ieq "true" ){$DefaultOptions += "--purge"}
 
 $Tasks = @{
     "$DataDrive\" = 
-    @("$TargetDrive\$TargetDriveData\", "$TargetDrive/AutoDirSync.data.log")
+    @{
+        Target = "$TargetDrive\$TargetDriveData\"
+        Log = "$TargetDrive\AutoDirSync.data.log"
+        Options = @{"--exclude" = @("^Games\Control.*", "^\$", "^Xilinx.*")}
+    }
     
     "$env:USERPROFILE\OneDrive\Documents" = 
-    @("$TargetDrive$TargetDriveCUserData\Documents", "$TargetDrive\AutoDirSync.docs.log")
+    @{
+        Target = "$TargetDrive$TargetDriveCUserData\Documents"
+        Log = "$TargetDrive\AutoDirSync.docs.log"
+        Options = @{}
+    }
 
     "$env:USERPROFILE\OneDrive\Desktop" = 
-    @("$TargetDrive$TargetDriveCUserData\Desktop", "$TargetDrive\AutoDirSync.desk.log")
+    @{
+        Target = "$TargetDrive$TargetDriveCUserData\Desktop"
+        Log = "$TargetDrive\AutoDirSync.desk.log"
+        Options = @{}
+    }
     
-    "$env:USERPROFILE\OneDrive\Downloads" = 
-    @("$TargetDrive$TargetDriveCUserData\Downloads", "$TargetDrive\AutoDirSync.down.log")    
+    "$env:USERPROFILE\Downloads" = 
+    @{
+        Target = "$TargetDrive$TargetDriveCUserData\Downloads"
+        Log = "$TargetDrive\AutoDirSync.down.log"
+        Options = @{}
+    }
     
     "$env:USERPROFILE\OneDrive\Pictures" = 
-    @("$TargetDrive$TargetDriveCUserData\Pictures", "$TargetDrive\AutoDirSync.pics.log")
+    @{
+        Target = "$TargetDrive$TargetDriveCUserData\Pictures"
+        Log = "$TargetDrive\AutoDirSync.pics.log"
+        Options = @{}
+    }
     
     "$env:USERPROFILE\Videos" = 
-    @("$TargetDrive$TargetDriveCUserData\Videos", "$TargetDrive\AutoDirSync.vids.log")
+    @{
+        Target = "$TargetDrive$TargetDriveCUserData\Videos"
+        Log = "$TargetDrive\AutoDirSync.vids.log"
+        Options = @{}
+    }
 }
-
 
 #######################################
 # Main Program
 
-Logger -Message "$DateTime`r`nStarting AutoDirSync.." -LogFile $TargetLog
+Logger -Message "------------------------------------------------`r`n@Starting AutoDirSync.. at $DateTime`r`n------------------------------------------------" -LogFile $TargetLog
+Logger -Message "Sleeping for $InitSleep Seconds; to allow for interruptions to scheduled sync task if required, as it is destructive in nature." -LogFile $TargetLog
+Start-Sleep -Seconds $InitSleep
 
 $Jobs = foreach ($Source in $Tasks.Keys){
     $SourceOptions = $Tasks[$Source]
-    $Target = $SourceOptions[0]
-    $Log = $SourceOptions[1]
+    $Target = $SourceOptions["Target"]
+    $Log = $SourceOptions["Log"]
+    $SpecificOptions = $SourceOptions["Options"]
+
     $CommandString = "dirsync '$Source' '$Target' "
     
     # Append Default Options
-    $ToThrow = foreach($Option in $DefaultOptions){
+    $ThrowVar = foreach($Option in $DefaultOptions){
         $CommandString += "$Option "
+    }
+
+    # Append Source Specific Options
+    $ThrowVar = foreach($Option in $SpecificOptions.Keys){
+        $CommandString += "$Option "
+        if($SpecificOptions[$Option] -is [System.Array])
+        {
+            $Array = $SpecificOptions[$Option];
+            foreach($Value in $Array){
+                $CommandString += '"' + $Value + '" '
+            }
+        }
+        else{
+            $CommandString += "'$SpecificOptions[$Option]' "
+        }
     }
 
     # Individual Tasks Logs
@@ -81,15 +133,15 @@ $Jobs = foreach ($Source in $Tasks.Keys){
     $block = [Scriptblock]::Create($CommandString)
     
     # Main Target Log
-    $haha = Logger -Message "Starting Job`r`n`tSource: $Source`r`n`tTarget: $Target`r`n`tLogfile: $Log`r`n`tCommandBlock:`r`n`t`t$block" -LogFile $TargetLog
+    $ThrowVar = Logger -Message "------------`r`nStarting Job`r`n------------`r`n`tSource: '$Source'`r`n`tTarget: '$Target'`r`n`tLogfile: '$Log'`r`n`tCommandBlock:`r`n`t`t$block" -LogFile $TargetLog
 
     Start-Job -ScriptBlock $block
 }
 
-$Redndnt = Wait-Job $Jobs
+$ThrowVar = Wait-Job $Jobs
 
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-Logger -Message "-----------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n-----------------------------------------------" -LogFile $TargetLog
+Logger -Message "--------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n--------------------------------------------`r`n`r`n``r`n" -LogFile $TargetLog
 
 exit(0)

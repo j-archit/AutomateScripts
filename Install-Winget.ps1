@@ -38,12 +38,6 @@ $SecondaryPrograms = @{
 $PackageParams = @{
     "Geogebra Classic" = 
     @{"--id" = "Geogebra.Classic"}
-    
-    "7-Zip" = 
-    @{"-h" = ""}
-
-    "ModernFlyouts" =
-    @{"-h" = ""}
 }
 
 $PythonLibs = @(
@@ -182,7 +176,7 @@ function Install-From-Hashes {
     }
 }
 
-<#
+
 #############################
 # Install Required Programs #
 #############################
@@ -203,7 +197,7 @@ Logger -Message "using Pip to install.."
 foreach($PythonLib in $PythonLibs){
     pip install $PythonLib | Logger
 }
-#>
+
 ##############################
 # Install Secondary Programs #
 ##############################
