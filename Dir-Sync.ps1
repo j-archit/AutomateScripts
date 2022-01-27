@@ -40,13 +40,11 @@ $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
 $DefaultOptions = @("--verbose", "--diff", "")
 
 $Tasks = @{
-    <#
     "$DataDrive\" = 
     @("$TargetDrive\$TargetDriveData\", "$TargetDrive/AutoDirSync.data.log")
     
     "$env:USERPROFILE\OneDrive\Documents" = 
     @("$TargetDrive$TargetDriveCUserData\Documents", "$TargetDrive\AutoDirSync.docs.log")
-    #>
 
     "$env:USERPROFILE\OneDrive\Desktop" = 
     @("$TargetDrive$TargetDriveCUserData\Desktop", "$TargetDrive\AutoDirSync.desk.log")

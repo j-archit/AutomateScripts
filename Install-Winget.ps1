@@ -10,6 +10,7 @@ $Log = ".\installer.log"
 $DefaultOptionsHash = @{
     '--accept-source-agreements'  = ""
     '--accept-package-agreements' = ""
+    '-h' = ""
     }
 
 $MainPrograms = @{
@@ -31,14 +32,18 @@ $SecondaryPrograms = @{
     "7-Zip" = $s1
     "libreoffice" = $s1
     "ModernFlyouts" = $s1
-    "Geogebra Classic" = $s1
+    "GeoGebra Classic" = $s1
 }
 
 $PackageParams = @{
-    "Geogebra Classic" = @{
-                            "--id" = "Geogebra.Classic"
-                            }
+    "Geogebra Classic" = 
+    @{"--id" = "Geogebra.Classic"}
+    
+    "7-Zip" = 
+    @{"-h" = ""}
 
+    "ModernFlyouts" =
+    @{"-h" = ""}
 }
 
 $PythonLibs = @(
@@ -79,12 +84,12 @@ function Install-Package-Command-String {
     
     if($PackageParams -ne $null){
         ForEach($Option in $PackageParams.Keys){
-            $QueryString = $QueryString + " " + $Option + " " + $OtherParameters[$Option]
+            $QueryString = $QueryString + " " + $Option + " " + $PackageParams[$Option]
         }
     }
 
     # Before Adding Default Parameters, create the CheckInstallString
-    $CheckInstallString = "winget list -q " + $QueryString + "| Out-String -Stream"
+    $CheckInstallString = "winget list -q " + $QueryString
 
     # Add Default Installer Parameters
     if($OtherParameters -ne $null){
@@ -98,15 +103,14 @@ function Install-Package-Command-String {
     $exist = Start-Job -ScriptBlock $scriptBlock
     $this_is_to_stop_the_object_being_put_to_the_output_stream = Wait-Job $exist; # Powershell has weird return semantics.
     $exists = Receive-Job $exist
+
+    if($exists -is [System.Array]){
+        $exists = $exists[-1];
+    }
+
     Logger -Message "Package: $Package"
 
-    if(!$exists.Contains($NotInstalledString)){
-        # No Install Job required, send Null Command
-        $mes = "`tAlready installed, skipping."
-        Logger -Message $mes
-        return "$null"
-    }
-    else{
+    if($exists.Contains($NotInstalledString)){
         # Install
         $InstallString = "winget install " + $QueryString
         $message = "`tCommand: " + $InstallString
@@ -114,6 +118,12 @@ function Install-Package-Command-String {
         # Log and Send Installer Job
         Logger -Message $message
         return $InstallString
+    }
+    else{
+        # No Install Job required, send Null Command
+        $mes = "`tAlready installed, skipping."
+        Logger -Message $mes
+        return "$null"
     }
 }
 
@@ -127,13 +137,13 @@ function Install-From-Hashes {
         if($PackageParams[$Package] -eq $null) {
             $blockstring = Install-Package-Command-String `
                 -Package $Package `
-                -Source $MainPrograms[$Package] `
+                -Source $Programs[$Package] `
                 -OtherParameters $DefaultOptionsHash;
         }
         else {
             $blockstring = Install-Package-Command-String `
                 -Package $Package `
-                -Source $MainPrograms[$Package] `
+                -Source $Programs[$Package] `
                 -PackageParams $PackageParams[$Package] `
                 -OtherParameters $DefaultOptionsHash;
         }
@@ -157,24 +167,22 @@ function Install-From-Hashes {
         
         $ResultLogRequired = 0;
         if(-not $ResultLogRequired){
-            Logger -Message "`r`nResult Log: "
+            Logger -Message "`r`nAction Log: "
         }
 
-        # Multiple Lines in Output - Use last line for status
-        if($Output -is [Array]){
-            $Output = $Output[-1];
-        }
-        if($Output.Contains("Successfully installed")){
-            $ResultLog = "Successful"
+        if($Output -Contains "Successfully installed"){
+            $ResultLog = "Successfully Installed."
         }
         else {
-            $ResultLog = "Failed"
+            $ResultLog = "Failed to Install."
         }
-        
-        Logger -Mesage $ResultLog
+
+        $ResultLog = $Job.Command.Split("'")[1] + ": " + $ResultLog;
+        Logger -Message $ResultLog
     }
 }
 
+<#
 #############################
 # Install Required Programs #
 #############################
@@ -195,7 +203,7 @@ Logger -Message "using Pip to install.."
 foreach($PythonLib in $PythonLibs){
     pip install $PythonLib | Logger
 }
-
+#>
 ##############################
 # Install Secondary Programs #
 ##############################
