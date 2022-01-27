@@ -1,34 +1,97 @@
-﻿# Requirements: dirsync via python or an executable on path
+﻿$ErrorActionPreference = "Stop";
+$DateTime = Get-Date
+$DateTime = $DateTime.ToString()
+$DefaultLog = "$env:USERPROFILE/AutoDirSync.log"
 
-# Source
-$data_drive_letter = (Get-Volume -FileSystemLabel Data).DriveLetter
-$data_source_path = $data_drive_letter + ":\"
-$C_source = "C:\Users\Archit"
+# Requirements: dirsync via python or an executable on path
 
-# Target
-$driveLetter = (Get-Volume -FileSystemLabel Archit).DriveLetter
-$target_drive = $driveLetter+":\"
-$target_data_path = $driveLetter + ":\Data\"
-$target_C_path = $driveLetter + ":\C\UserData\"
-
-# Start Jobs
-
-#$j_data = Start-Job -ScriptBlock {dirsync $data_source_path $target_data_path --purge --verbose *> $target_drive"autoDirsync_Data.log"}
-
-$sb = {
-    param($C_source, $target_C_path, $target_drive)
-    dirsync '$C_source\OneDrive\Desktop' '$target_C_path\Desktop' --purge --verbose
+function Logger {
+    param(
+        [parameter(ValueFromPipeline=$true, Mandatory=$false)]$piped,
+        [string]$Message,
+        [string]$LogFile
+    )
+    if($piped){
+        $Message = $piped
+    }
+    $Message | Tee-Object -FilePath $LogFile -Append | Write-host
 }
- 
-$j2 = Start-Job $sb -ArgumentList $C_source, $target_C_path, $target_drive
 
-<#
-$j_desk = Start-Job -ScriptBlock {dirsync "$C_source\OneDrive\Desktop" "$target_C_path\Desktop" --purge --verbose }#*> $target_drive"autoDirsync_desk.log"}
-$j_down = Start-Job -ScriptBlock {dirsync $C_source\OneDrive\Downloads\ $target_C_path\Downloads\ --purge --verbose *> $target_drive"autoDirsync_down.log"}
-$j_docs = Start-Job -ScriptBlock {dirsync $C_source\OneDrive\Documents\ $target_C_path\Documents\ --purge --verbose *> $target_drive"autoDirsync_docs.log"}
-$j_pics = Start-Job -ScriptBlock {dirsync $C_source\OneDrive\Pictures\ $target_C_path\Pictures\ --purge --verbose *> $target_drive"autoDirsync_pics.log"}
-$j_vids = Start-Job -ScriptBlock {dirsync $C_source\Videos\ $target_C_path\Videos\ --purge --verbose *> $target_drive"autoDirsync_vids.log"}
+#######################################
+# Get/Set Target and Sources
+try{
+    $TargetDrive = (Get-Volume -FileSystemLabel Archit).DriveLetter + ":"
+    $TargetLog = "$TargetDrive/AutoDirSync.log"
+}
+catch{
+    Logger -Message $DateTime -LogFile $DefaultLog
+    Logger -Message "Target Drive Not Found!`r`nExiting" -LogFile $DefaultLog
+    exit(-1)
+}
 
- $j_*
-#>
-Wait-Job $j_desk 
+$TargetDriveCUserData = "\C\UserData"
+$TargetDriveData = "\Data"
+
+# Data Source Drive
+$DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
+
+#######################################
+# Set Tasks and Options
+$DefaultOptions = @("--verbose", "--diff", "")
+
+$Tasks = @{
+    <#
+    "$DataDrive\" = 
+    @("$TargetDrive\$TargetDriveData\", "$TargetDrive/AutoDirSync.data.log")
+    
+    "$env:USERPROFILE\OneDrive\Documents" = 
+    @("$TargetDrive$TargetDriveCUserData\Documents", "$TargetDrive\AutoDirSync.docs.log")
+    #>
+
+    "$env:USERPROFILE\OneDrive\Desktop" = 
+    @("$TargetDrive$TargetDriveCUserData\Desktop", "$TargetDrive\AutoDirSync.desk.log")
+    
+    "$env:USERPROFILE\OneDrive\Downloads" = 
+    @("$TargetDrive$TargetDriveCUserData\Downloads", "$TargetDrive\AutoDirSync.down.log")    
+    
+    "$env:USERPROFILE\OneDrive\Pictures" = 
+    @("$TargetDrive$TargetDriveCUserData\Pictures", "$TargetDrive\AutoDirSync.pics.log")
+    
+    "$env:USERPROFILE\Videos" = 
+    @("$TargetDrive$TargetDriveCUserData\Videos", "$TargetDrive\AutoDirSync.vids.log")
+}
+
+
+#######################################
+# Main Program
+
+Logger -Message "$DateTime`r`nStarting AutoDirSync.." -LogFile $TargetLog
+
+$Jobs = foreach ($Source in $Tasks.Keys){
+    $SourceOptions = $Tasks[$Source]
+    $Target = $SourceOptions[0]
+    $Log = $SourceOptions[1]
+    $CommandString = "dirsync '$Source' '$Target' "
+    
+    # Append Default Options
+    $ToThrow = foreach($Option in $DefaultOptions){
+        $CommandString += "$Option "
+    }
+
+    # Individual Tasks Logs
+    $CommandString += " *> '$Log' "
+    $block = [Scriptblock]::Create($CommandString)
+    
+    # Main Target Log
+    $haha = Logger -Message "Starting Job`r`n`tSource: $Source`r`n`tTarget: $Target`r`n`tLogfile: $Log`r`n`tCommandBlock:`r`n`t`t$block" -LogFile $TargetLog
+
+    Start-Job -ScriptBlock $block
+}
+
+$Redndnt = Wait-Job $Jobs
+
+$DateTime = Get-Date
+$DateTime = $DateTime.ToString()
+Logger -Message "-----------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n-----------------------------------------------" -LogFile $TargetLog
+
+exit(0)
