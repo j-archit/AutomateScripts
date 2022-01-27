@@ -54,7 +54,7 @@ $Tasks = @{
     @{
         Target = "$TargetDrive\$TargetDriveData\"
         Log = "$TargetDrive\AutoDirSync.data.log"
-        Options = @{"--exclude" = @("^Games\Control.*", "^\$", "^Xilinx.*")}
+        Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
     }
     
     "$env:USERPROFILE\OneDrive\Documents" = 
@@ -98,6 +98,8 @@ $Tasks = @{
 
 Logger -Message "------------------------------------------------`r`n@Starting AutoDirSync.. at $DateTime`r`n------------------------------------------------" -LogFile $TargetLog
 Logger -Message "Sleeping for $InitSleep Seconds; to allow for interruptions to scheduled sync task if required, as it is destructive in nature." -LogFile $TargetLog
+Logger -Message "Defaut Options:" -LogFile $TargetLog
+Write-Host  $DefaultOptions | Logger -LogFile $TargetLog
 Start-Sleep -Seconds $InitSleep
 
 $Jobs = foreach ($Source in $Tasks.Keys){
@@ -142,6 +144,6 @@ $ThrowVar = Wait-Job $Jobs
 
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-Logger -Message "--------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n--------------------------------------------`r`n`r`n``r`n" -LogFile $TargetLog
+Logger -Message "--------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n--------------------------------------------`r`n`r`n`r`n" -LogFile $TargetLog
 
 exit(0)
