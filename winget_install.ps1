@@ -1,43 +1,106 @@
+$Log = ".\installer.log"
+$NotInstalledString = "No installed package found matching input criteria."
+
+function Install-Package-ScriptBlock {
+    param (
+        [string]$Package, 
+        [string]$Source,
+        [hashtable]$PackageParams,
+        [hashtable]$OtherParameters
+    )
+
+    $QueryString = $Package
+
+    if($Source -ne ""){
+        $QueryString = $QueryString + " -s " + $Source
+    }
+    if($OtherParameters -ne $null){
+        ForEach($Option in $OtherParameters.Keys){
+            $QueryString = $QueryString + " " + $Option + " " + $OtherParameters[$Option]
+        }
+    }
+
+    # Check if Already Exists
+    $CheckInstallString = "winget list -q " + $QueryString + "| Out-String -Stream"
+    $scriptBlock = [Scriptblock]::Create($CheckInstallString)
+    $exist = Start-Job -ScriptBlock $scriptBlock
+    Wait-Job $exist
+    $exists = Receive-Job $exist
+
+    if(!$exists.Contains($NotInstalledString)){
+        $LogOp = $Package + " already installed, skipping."
+        $abc = "Write-Output " + $LogO
+        return $abc
+    }
+    else{
+        # Install
+        $InstallString = "winget install " + $QueryString
+        $LogOutput = "Issuing Install of " + $Package + " with command: `r`n" + $InstallString
+        $LogOutput | Out-File -FilePath $Log -Append
+        return $InstallString
+    }
+}
+
+# Define Sources
+$s1 = "winget"
+$s2 = "msstore"
+
+$DefaultOptionsHash = @{
+    '--accept-source-agreements'  = ""
+    '--accept-package-agreements' = ""
+    }
+
 #############################
 # Install Required Programs #
 #############################
 
-winget install --accept-source-agreements --accept-package-agreements `
-vscode -s winget
+Write-Output "Installing Required Programs.. " | Out-File -FilePath $Log -Append
 
-winget install --accept-source-agreements --accept-package-agreements `
-"Python 3" -s winget
+$MainProgramsw = @{
+    "vscode"   = $s1
+    "Python 3" = $s1
+    "Windows Terminal" = $s1
+    "obs" = $s1
+    "onenote for windows 10" = $s2
+    "discord" = $s1
+    "VLC media player" = $s1
+    "Spotify" = $s2
+    "Whatsapp" = $s2
+    "git" = $s1
+    "NVIDIA GeForce Experience" = $s1
+    "GNU Octave" = $s1
+}
 
-winget install --accept-source-agreements --accept-package-agreements `
-"Windows Terminal" -s winget 
+$MainPrograms = @{
+    "Python 3"   = $s1
+    "windows terminal" = $s1
+}
 
-winget install --accept-source-agreements --accept-package-agreements `
-obs -s winget
+$Jobs = foreach($Package in $MainPrograms.Keys){   
+    $blockstring = Install-Package-ScriptBlock -Package $Package -Source $MainPrograms[$Package] -OtherParameters $DefaultOptionsHash
+    $scriptBlock = [Scriptblock]::Create($blockstring)
+    
+    Start-Job -ScriptBlock $scriptBlock
+}
 
-winget install --accept-source-agreements --accept-package-agreements `
-"Onenote for Windows 10" -s msstore
+Wait-Job $Jobs
+$Output = Receive-Job $Jobs
+foreach ($item in $Output){
+    if($item.Contains("Successfully installed")){
+        $ResultLog = "Successful"
+    }
+    else {
+        if($item.Contains("skipping")){
+            $ResultLog = $item
+        }
+        else {
+            $ResultLog = "Failed"
+        }
+    }
+    $ResultLog | Out-File -FilePath $Log -Append
+}
 
-winget install --accept-source-agreements --accept-package-agreements `
-discord -s winget
-
-winget install --accept-source-agreements --accept-package-agreements `
-"VLC media player" -s winget
-
-winget install --accept-source-agreements --accept-package-agreements `
-Spotify -s msstore
-
-winget install --accept-source-agreements --accept-package-agreements `
-Whatsapp -s msstore
-
-winget install --accept-source-agreements --accept-package-agreements `
-git -s winget
-
-winget install --accept-source-agreements --accept-package-agreements `
-"NVIDIA GeForce Experience" -s winget
-
-winget install --accept-source-agreements --accept-package-agreements `
-"GNU Octave" -s winget
-
+<#
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
 
 # Python Library installs
@@ -58,3 +121,5 @@ ModernFlyouts -s winget
 
 winget install --accept-source-agreements --accept-package-agreements `
 "geogebra classic" -s winget --id "Geogebra.Classic"
+
+#>
