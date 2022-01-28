@@ -1,13 +1,14 @@
 ﻿# Requirements: dirsync via python or an executable on path
 param (
     [string]$purge,
+    [string]$diff,
     [double]$InitSleep
 )
 
 $ErrorActionPreference = "Stop";
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-$DefaultLog = "$env:USERPROFILE/AutoDirSync.log"
+$DefaultLog = "$env:USERPROFILE\AutoDirSync.log"
 
 #######################################
 # Logging
@@ -29,7 +30,6 @@ function Logger {
 
 try{
     $TargetDrive = (Get-Volume -FileSystemLabel Archit).DriveLetter + ":"
-    $TargetLog = "$TargetDrive/AutoDirSync.log"
 }
 catch{
     Logger -Message $DateTime -LogFile $DefaultLog
@@ -39,6 +39,8 @@ catch{
 
 $TargetDriveCUserData = "\C\UserData"
 $TargetDriveData = "\Data"
+$TargetLogDir = "$TargetDrive\Dir-Sync\logs\"
+$TargetLog = "$TargetLogDir\adir-sync.log"
 
 # Data Source Drive
 $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
@@ -46,49 +48,50 @@ $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
 #######################################
 # Set Tasks and Options
 
-$DefaultOptions = @("--verbose", "--diff")
+$DefaultOptions = @("--verbose")
 if($purge -ieq "true" ){$DefaultOptions += "--purge"}
+if($diff -ieq "true" ){$DefaultOptions += "--diff"}
 
 $Tasks = @{
     "$DataDrive\" = 
     @{
         Target = "$TargetDrive\$TargetDriveData\"
-        Log = "$TargetDrive\AutoDirSync.data.log"
+        Log = "$TargetLogDir\data-sync.log"
         Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
     }
     
     "$env:USERPROFILE\OneDrive\Documents" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Documents"
-        Log = "$TargetDrive\AutoDirSync.docs.log"
-        Options = @{}
+        Log = "$TargetLogDir\docs-sync.log"
+        Options = @{"--exclude" = @(".*Assassin's Creed Valhalla/cache.*")}
     }
 
     "$env:USERPROFILE\OneDrive\Desktop" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Desktop"
-        Log = "$TargetDrive\AutoDirSync.desk.log"
+        Log ="$TargetLogDir\desk-sync.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\Downloads" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Downloads"
-        Log = "$TargetDrive\AutoDirSync.down.log"
+        Log = "$TargetLogDir\down-sync.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\OneDrive\Pictures" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Pictures"
-        Log = "$TargetDrive\AutoDirSync.pics.log"
+        Log = "$TargetLogDir\pics-sync.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\Videos" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Videos"
-        Log = "$TargetDrive\AutoDirSync.vids.log"
+        Log = "$TargetLogDir\vids-sync.log"
         Options = @{}
     }
 }
@@ -99,7 +102,7 @@ $Tasks = @{
 Logger -Message "------------------------------------------------`r`n@Starting AutoDirSync.. at $DateTime`r`n------------------------------------------------" -LogFile $TargetLog
 Logger -Message "Sleeping for $InitSleep Seconds; to allow for interruptions to scheduled sync task if required, as it is destructive in nature." -LogFile $TargetLog
 Logger -Message "Defaut Options:" -LogFile $TargetLog
-Write-Host  $DefaultOptions | Logger -LogFile $TargetLog
+Write-Output $DefaultOptions | Logger -LogFile $TargetLog
 Start-Sleep -Seconds $InitSleep
 
 $Jobs = foreach ($Source in $Tasks.Keys){

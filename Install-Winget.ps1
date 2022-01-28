@@ -14,6 +14,7 @@ $DefaultOptionsHash = @{
     }
 
 $MainPrograms = @{
+    "Powershell" = $s1
     "vscode"   = $s1
     "Python 3" = $s1
     "Windows Terminal" = $s1
@@ -95,7 +96,7 @@ function Install-Package-Command-String {
     # Check if Already Exists
     $scriptBlock = [Scriptblock]::Create($CheckInstallString)
     $exist = Start-Job -ScriptBlock $scriptBlock
-    $this_is_to_stop_the_object_being_put_to_the_output_stream = Wait-Job $exist; # Powershell has weird return semantics.
+    $ToThrow = Wait-Job $exist; # Powershell has weird return semantics.
     $exists = Receive-Job $exist
 
     if($exists -is [System.Array]){
@@ -147,7 +148,7 @@ function Install-From-Hashes {
     }
     
     # Wait For all Install Jobs to Finish
-    $tisofbpttop = Wait-Job $Jobs
+    $ToThrow = Wait-Job $Jobs
     
     $ResultLogRequired = 1;
 
