@@ -14,10 +14,13 @@ $DefaultLog = "$env:USERPROFILE\adir-sync.log"
 # Functions and Parameters
 
 $PSDefaultParameterValues = @{
-    "InitSleep" = 15
     "Notify-Popup:Delay" = 0
     "Notify-Popup:Flag" =  1
 }
+if($InitSleep -ne $null){
+    $InitSleep = 15
+}
+
 function Logger {
     param(
         [parameter(ValueFromPipeline=$true, Mandatory=$false)]$piped,

@@ -1,3 +1,4 @@
+#!"C:\Program Files\PowerShell\7\pwsh.exe"
 $ID = $env:HDDID
 $ScriptPath = $env:DIRSYNCSCRIPT
 $Log = $env:DIRSYNCDEFLOG
@@ -23,8 +24,8 @@ $FilterHash = @{
     ID = 2006
 }
 
-$Event = Get-WinEvent -FilterHashtable $FilterHash -MaxEvents 1
-$OutputXML = $Event.ToXml()
+$EventLog = Get-WinEvent -FilterHashtable $FilterHash -MaxEvents 1
+$OutputXML = $EventLog.ToXml()
 
 if(!$OutputXML.Contains($ID)) {
     Logger -LogFile $Log -Message "Check Failed, Event XML:`n$OutputXML"
