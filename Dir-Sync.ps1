@@ -8,11 +8,16 @@ param (
 $ErrorActionPreference = "Stop";
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-$DefaultLog = "$env:USERPROFILE\AutoDirSync.log"
+$DefaultLog = "$env:USERPROFILE\adir-sync.log"
 
 #######################################
-# Logging
+# Functions and Parameters
 
+$PSDefaultParameterValues = @{
+    "global:InitSleep" = 15
+    "Notify-Popup:Delay" = 0
+    "Notify-Popup:Flag" =  1
+}
 function Logger {
     param(
         [parameter(ValueFromPipeline=$true, Mandatory=$false)]$piped,
@@ -25,22 +30,36 @@ function Logger {
     $Message | Tee-Object -FilePath $LogFile -Append | Write-host
 }
 
+function Notify-Popup {
+    param(
+        [string]$Message,
+        $Delay,
+        $Flag
+    )
+    $wshell = New-Object -ComObject Wscript.Shell
+    $wshell.popup($Message, $Delay, "Dir-Sync Backup", $Flag)
+}
+
 #######################################
 # Get/Set Target and Sources
+# Note that this section is not important for the script in general.
+# You should set up your own sources with hardcoded 
+# absolute paths in the Tasks Hashtable as required.
 
 try{
     $TargetDrive = (Get-Volume -FileSystemLabel Archit).DriveLetter + ":"
 }
 catch{
     Logger -Message $DateTime -LogFile $DefaultLog
-    Logger -Message "Target Drive Not Found!`r`nExiting" -LogFile $DefaultLog
+    Logger -Message "Target Drive Not Found!`nExiting" -LogFile $DefaultLog
     exit(-1)
 }
 
 $TargetDriveCUserData = "\C\UserData"
 $TargetDriveData = "\Data"
-$TargetLogDir = "$TargetDrive\Dir-Sync\logs\"
-$TargetLog = "$TargetLogDir\adir-sync.log"
+try{
+    mkdir $TargetLogDir | Out-Null
+} catch {}
 
 # Data Source Drive
 $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
@@ -48,17 +67,21 @@ $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
 #######################################
 # Set Tasks and Options
 
+$TargetLogDir = "$TargetDrive\dir-sync\logs\"
+$TargetLog = "$TargetLogDir\adir-sync.log"
+
 $DefaultOptions = @("--verbose")
 if($purge -ieq "true" ){$DefaultOptions += "--purge"}
 if($diff -ieq "true" ){$DefaultOptions += "--diff"}
 
 $Tasks = @{
-    "$DataDrive\" = 
-    @{
-        Target = "$TargetDrive\$TargetDriveData\"
-        Log = "$TargetLogDir\data-sync.log"
-        Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
-    }
+
+    # "$DataDrive\" = 
+    # @{
+    #     Target = "$TargetDrive\$TargetDriveData\"
+    #     Log = "$TargetLogDir\data-sync.log"
+    #     Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
+    # }
     
     "$env:USERPROFILE\OneDrive\Documents" = 
     @{
@@ -99,11 +122,18 @@ $Tasks = @{
 #######################################
 # Main Program
 
-Logger -Message "------------------------------------------------`r`n@Starting AutoDirSync.. at $DateTime`r`n------------------------------------------------" -LogFile $TargetLog
-Logger -Message "Sleeping for $InitSleep Seconds; to allow for interruptions to scheduled sync task if required, as it is destructive in nature." -LogFile $TargetLog
+Logger -Message "----------------------------------------------`n@Starting Dir-Sync.. at $DateTime`n----------------------------------------------" -LogFile $TargetLog
+Logger -Message "Sleeping for $InitSleep Seconds; to allow for interruptions to `nscheduled sync task if required, as it is destructive in nature." -LogFile $TargetLog
 Logger -Message "Defaut Options:" -LogFile $TargetLog
 Write-Output $DefaultOptions | Logger -LogFile $TargetLog
 Start-Sleep -Seconds $InitSleep
+$Okay = Notify-Popup -Message "Starting Tasks. `nPress Ok to Continue or Cancel to Stop Sync" -Flag 33
+
+if($Okay -eq 2){ 
+    $Okay = Notify-Popup -Message "Sync Task Cancelled" -Flag 64
+    Logger -Message "! Sync Task Aborted by User." -LogFile $TargetLog
+    exit(2) 
+}
 
 $Jobs = foreach ($Source in $Tasks.Keys){
     $SourceOptions = $Tasks[$Source]
@@ -138,7 +168,7 @@ $Jobs = foreach ($Source in $Tasks.Keys){
     $block = [Scriptblock]::Create($CommandString)
     
     # Main Target Log
-    $ThrowVar = Logger -Message "------------`r`nStarting Job`r`n------------`r`n`tSource: '$Source'`r`n`tTarget: '$Target'`r`n`tLogfile: '$Log'`r`n`tCommandBlock:`r`n`t`t$block" -LogFile $TargetLog
+    $ThrowVar = Logger -Message "------------`nStarting Job`n------------`n`tSource: '$Source'`n`tTarget: '$Target'`n`tLogfile: '$Log'`n`tCommandBlock:`n`t`t$block" -LogFile $TargetLog
 
     Start-Job -ScriptBlock $block
 }
@@ -147,6 +177,7 @@ $ThrowVar = Wait-Job $Jobs
 
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-Logger -Message "--------------------------------------------`r`nAll Tasks Finished at $DateTime`r`n--------------------------------------------`r`n`r`n`r`n" -LogFile $TargetLog
+Logger -Message "--------------------------------------------`nAll Tasks Finished at $DateTime`n--------------------------------------------`n`n`n" -LogFile $TargetLog
 
+$Okay = Notify-Popup -Message "Sync Tasks Completed!" -Flag 64
 exit(0)
