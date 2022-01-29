@@ -14,6 +14,8 @@ function Logger {
     $Message | Tee-Object -FilePath $LogFile -Append | Write-host
 }
 
+$Timestamp = Get-Date
+Logger -LogFile $Log -Message "`n$Timestamp"
 Logger -LogFile $Log -Message "USB Connected, Starting Drive Check`nCheck Drive ID: $ID"
 
 $FilterHash = @{
@@ -21,8 +23,8 @@ $FilterHash = @{
     ID = 2006
 }
 
-$Log = Get-WinEvent -FilterHashtable $FilterHash -MaxEvents 1
-$OutputXML = $log.ToXml()
+$Event = Get-WinEvent -FilterHashtable $FilterHash -MaxEvents 1
+$OutputXML = $Event.ToXml()
 
 if(!$OutputXML.Contains($ID)) {
     Logger -LogFile $Log -Message "Check Failed, Event XML:`n$OutputXML"

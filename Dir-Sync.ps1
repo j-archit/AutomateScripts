@@ -14,7 +14,7 @@ $DefaultLog = "$env:USERPROFILE\adir-sync.log"
 # Functions and Parameters
 
 $PSDefaultParameterValues = @{
-    "global:InitSleep" = 15
+    "InitSleep" = 15
     "Notify-Popup:Delay" = 0
     "Notify-Popup:Flag" =  1
 }
@@ -55,14 +55,9 @@ catch{
     exit(-1)
 }
 
-$TargetDriveCUserData = "\C\UserData"
-$TargetDriveData = "\Data"
-try{
-    mkdir $TargetLogDir | Out-Null
-} catch {}
-
 # Data Source Drive
 $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
+$MediaDrive = (Get-Volume -FileSystemLabel Media).DriveLetter + ":"
 
 #######################################
 # Set Tasks and Options
@@ -70,51 +65,64 @@ $DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
 $TargetLogDir = "$TargetDrive\dir-sync\logs\"
 $TargetLog = "$TargetLogDir\adir-sync.log"
 
+try{
+    mkdir $TargetLogDir | Out-Null
+} catch {}
+
+$TargetDriveCUserData = "\C\UserData"
+
 $DefaultOptions = @("--verbose")
 if($purge -ieq "true" ){$DefaultOptions += "--purge"}
 if($diff -ieq "true" ){$DefaultOptions += "--diff"}
 
 $Tasks = @{
 
-    # "$DataDrive\" = 
-    # @{
-    #     Target = "$TargetDrive\$TargetDriveData\"
-    #     Log = "$TargetLogDir\data-sync.log"
-    #     Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
-    # }
+    "$DataDrive\" = 
+    @{
+        Target = "$TargetDrive\Data"
+        Log = "$TargetLogDir\data.log"
+        Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
+    }
     
+    "$MediaDrive\" = 
+    @{
+        Target = "$TargetDrive\Media"
+        Log = "$TargetLogDir\media.log"
+        Options = @{"--exclude" = @("^\$")}
+    }
+
     "$env:USERPROFILE\OneDrive\Documents" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Documents"
-        Log = "$TargetLogDir\docs-sync.log"
+        Log = "$TargetLogDir\docs.log"
         Options = @{"--exclude" = @(".*Assassin's Creed Valhalla/cache.*")}
     }
 
     "$env:USERPROFILE\OneDrive\Desktop" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Desktop"
-        Log ="$TargetLogDir\desk-sync.log"
+        Log ="$TargetLogDir\desk.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\Downloads" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Downloads"
-        Log = "$TargetLogDir\down-sync.log"
+        Log = "$TargetLogDir\down.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\OneDrive\Pictures" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Pictures"
-        Log = "$TargetLogDir\pics-sync.log"
+        Log = "$TargetLogDir\pics.log"
         Options = @{}
     }
     
     "$env:USERPROFILE\Videos" = 
     @{
         Target = "$TargetDrive$TargetDriveCUserData\Videos"
-        Log = "$TargetLogDir\vids-sync.log"
+        Log = "$TargetLogDir\vids.log"
         Options = @{}
     }
 }
