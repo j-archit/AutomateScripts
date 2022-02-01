@@ -1,4 +1,4 @@
 *.log
 *.ini
 
-config/*
+Dir-Sync/config/*

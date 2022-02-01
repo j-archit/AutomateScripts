@@ -28,7 +28,7 @@
     # Each Key inside the Tasks hashtable, defines a Sync Task
     Tasks = @{ 
         "<Task Source Directory>" = 
-        @{
+        @
             Target = "<Task Target Directory>" # Relative to FirstLevelSyncDir
             Log = "<Task Log File>" # Relative to FirstLevelSyncDir
             Options = @{"--exclude" = @("^Games.*", "XYZ.[5]*"), "--diff" = ""}
