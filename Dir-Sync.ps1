@@ -1,24 +1,22 @@
 ﻿# Requirements: dirsync via python or an executable on path
 param (
-    [string]$purge,
-    [string]$diff,
     [double]$InitSleep
 )
 
 $ErrorActionPreference = "Stop";
 $DateTime = Get-Date
 $DateTime = $DateTime.ToString()
-$DefaultLog = "$env:USERPROFILE\adir-sync.log"
 
-#######################################
-# Functions and Parameters
+############################
+# Functions and Parameters #
+############################
 
 $PSDefaultParameterValues = @{
     "Notify-Popup:Delay" = 0
     "Notify-Popup:Flag" =  1
 }
 if($InitSleep -ne $null){
-    $InitSleep = 15
+    $InitSleep = 5
 }
 
 function Logger {
@@ -43,92 +41,67 @@ function Notify-Popup {
     $wshell.popup($Message, $Delay, "Dir-Sync Backup", $Flag)
 }
 
-#######################################
-# Get/Set Target and Sources
-# Note that this section is not important for the script in general.
-# You should set up your own sources with hardcoded 
-# absolute paths in the Tasks Hashtable as required.
-
-try{
-    $TargetDrive = (Get-Volume -FileSystemLabel Archit).DriveLetter + ":"
+function Get-Volume-Info-By-Label{
+    param(
+        [string]$Label
+    )
+    try{
+        $temp = Get-Volume
+        foreach($VOL in $temp){
+            if($VOL.FileSystemLabel -eq $Label){
+                return $VOL
+            }
+            else{
+                continue
+            }
+        }
+    }
+    catch{
+        # For Systems that Do not have Get-Volume
+    }
 }
-catch{
-    Logger -Message $DateTime -LogFile $DefaultLog
-    Logger -Message "Target Drive Not Found!`nExiting" -LogFile $DefaultLog
+
+function Get-Target-Root {
+    # Returns the First Match Only. 
+    # So Plug Only One at a time.
+    param(
+        [array]$HDD_Labels
+    )
+    $FOUND = $null
+    foreach($Label in $HDD_Labels){
+        $Rec = Get-Volume-Info-By-Label -Label $Label
+        if($null -ne $Rec){
+            $FOUND = $Rec
+            return $FOUND.DriveLetter
+        }
+    }
+    return $FOUND
+}
+
+##########################
+# Get Configuration Data #
+##########################
+# Requires Environment
+# Variable DIRSYNCCONFIG be set to the default .psd1 data file
+$ConfigTable = Import-PowerShellDataFile $env:DIRSYNCCONFIG
+$HDD_LABELS_IDS = $ConfigTable["HDD_LABELS_IDS"]
+$DefaultLog = $ConfigTable["DIRSYNCDEFLOG"]
+
+# Get Target Drive
+$TargetRoot = Get-Target-Root -HDD_Labels $HDD_LABELS_IDS.Keys
+if($null -eq $TargetRoot){
+    Logger -Message "No Configured Targets Found. Exiting!" -LogFile $DefaultLog
     exit(-1)
 }
 
-# Data Source Drive
-$DataDrive = (Get-Volume -FileSystemLabel Data).DriveLetter + ":"
-$MediaDrive = (Get-Volume -FileSystemLabel Media).DriveLetter + ":"
+$TargetSyncDir = $TargetRoot + ":\" + $ConfigTable["FirstLevelSyncDir"]
+$Tasks = $ConfigTable["Tasks"]
 
-#######################################
-# Set Tasks and Options
-
-$TargetLogDir = "$TargetDrive\dir-sync\logs\"
+$TargetLogDir = $TargetSyncDir + $ConfigTable["TargetLogDir"]
 $TargetLog = "$TargetLogDir\adir-sync.log"
+mkdir -Force $TargetLogDir | Out-Null
 
-try{
-    mkdir $TargetLogDir | Out-Null
-} catch {}
-
-$TargetDriveCUserData = "\C\UserData"
-
-$DefaultOptions = @("--verbose")
-if($purge -ieq "true" ){$DefaultOptions += "--purge"}
-if($diff -ieq "true" ){$DefaultOptions += "--diff"}
-
-$Tasks = @{
-
-    "$DataDrive\" = 
-    @{
-        Target = "$TargetDrive\Data"
-        Log = "$TargetLogDir\data.log"
-        Options = @{"--exclude" = @("^Games.Control.*", "^\$", "^Xilinx.*")}
-    }
-    
-    "$MediaDrive\" = 
-    @{
-        Target = "$TargetDrive\Media"
-        Log = "$TargetLogDir\media.log"
-        Options = @{"--exclude" = @("^\$")}
-    }
-
-    "$env:USERPROFILE\OneDrive\Documents" = 
-    @{
-        Target = "$TargetDrive$TargetDriveCUserData\Documents"
-        Log = "$TargetLogDir\docs.log"
-        Options = @{"--exclude" = @(".*Assassin's Creed Valhalla/cache.*")}
-    }
-
-    "$env:USERPROFILE\OneDrive\Desktop" = 
-    @{
-        Target = "$TargetDrive$TargetDriveCUserData\Desktop"
-        Log ="$TargetLogDir\desk.log"
-        Options = @{}
-    }
-    
-    "$env:USERPROFILE\Downloads" = 
-    @{
-        Target = "$TargetDrive$TargetDriveCUserData\Downloads"
-        Log = "$TargetLogDir\down.log"
-        Options = @{}
-    }
-    
-    "$env:USERPROFILE\OneDrive\Pictures" = 
-    @{
-        Target = "$TargetDrive$TargetDriveCUserData\Pictures"
-        Log = "$TargetLogDir\pics.log"
-        Options = @{}
-    }
-    
-    "$env:USERPROFILE\Videos" = 
-    @{
-        Target = "$TargetDrive$TargetDriveCUserData\Videos"
-        Log = "$TargetLogDir\vids.log"
-        Options = @{}
-    }
-}
+$DefaultOptions = $ConfigTable["DefaultOptions"]
 
 #######################################
 # Main Program
@@ -148,8 +121,8 @@ if($Okay -eq 2){
 
 $Jobs = foreach ($Source in $Tasks.Keys){
     $SourceOptions = $Tasks[$Source]
-    $Target = $SourceOptions["Target"]
-    $Log = $SourceOptions["Log"]
+    $Target = $TargetSyncDir + $SourceOptions["Target"]
+    $Log = $TargetSyncDir + $SourceOptions["Log"]
     $SpecificOptions = $SourceOptions["Options"]
 
     $CommandString = "dirsync '$Source' '$Target' "
