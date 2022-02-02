@@ -8,7 +8,7 @@ $PythonLibs = $ConfigTable["PythonLibs"]
 # Required Constants
 $Sources = @("", "winget", "msstore")
 $NotInstalledString = "No installed package found matching input criteria."
-$Log = ".\installer.log"
+$Log = "$PSScriptRoot\installer.log"
 "" | Out-File -FilePath $Log
 
 # Functions
