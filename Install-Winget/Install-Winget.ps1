@@ -1,53 +1,15 @@
 # Define Sources, Hashes, Constants and Program Lists in Hashes
-$s1 = "winget"
-$s2 = "msstore"
+$ConfigTable = Import-PowerShellDataFile "$PSScriptRoot\config\install-config.psd1"
+$ProgramSets = $ConfigTable["ProgramSets"]
+$DefaultOptions = $ConfigTable["DefaultOptions"]
+$PackageParams = $ConfigTable["PackageParams"]
+$PythonLibs = $ConfigTable["PythonLibs"]
 
+# Required Constants
+$Sources = @("", "winget", "msstore")
 $NotInstalledString = "No installed package found matching input criteria."
 $Log = ".\installer.log"
 "" | Out-File -FilePath $Log
-
-
-$DefaultOptionsHash = @{
-    '--accept-source-agreements'  = ""
-    '--accept-package-agreements' = ""
-    '-h' = ""
-    }
-
-$MainPrograms = @{
-    "Powershell" = $s1
-    "vscode"   = $s1
-    "Python 3" = $s1
-    "Windows Terminal" = $s1
-    "obs" = $s1
-    "onenote for windows 10" = $s2
-    "discord" = $s1
-    "VLC media player" = $s1
-    "Spotify" = $s2
-    "Whatsapp" = $s2
-    "git" = $s1
-    "NVIDIA GeForce Experience" = $s1
-    "Octave" = $s1
-}
-
-$SecondaryPrograms = @{
-    "7-Zip" = $s1
-    "libreoffice" = $s1
-    "ModernFlyouts" = $s1
-    "GeoGebra Classic" = $s1
-}
-
-$PackageParams = @{
-    "Geogebra Classic" = 
-    @{"--id" = "Geogebra.Classic"}
-}
-
-$PythonLibs = @(
-    'numpy', 
-    'scipy', 
-    'python-dotenv', 
-    'psycopg2', 
-    'nuitka'
-)
 
 # Functions
 function Logger {
@@ -66,18 +28,18 @@ function Logger {
 function Install-Package-Command-String {
     param (
         [string]$Package, 
-        [string]$Source,
+        [string]$SourceNum,
         [hashtable]$PackageParams,
         [hashtable]$OtherParameters
     )
 
     $QueryString = "'" + $Package + "'"
 
-    if($Source -ne ""){
-        $QueryString = $QueryString + " -s " + $Source
+    if($SourceNum -ne 0){
+        $QueryString = $QueryString + " -s " + $Sources[$SourceNum]
     }
     
-    if($PackageParams -ne $null){
+    if($null -ne $PackageParams){
         ForEach($Option in $PackageParams.Keys){
             $QueryString = $QueryString + " " + $Option + " " + $PackageParams[$Option]
         }
@@ -85,13 +47,6 @@ function Install-Package-Command-String {
 
     # Before Adding Default Parameters, create the CheckInstallString
     $CheckInstallString = "winget list -q " + $QueryString
-
-    # Add Default Installer Parameters
-    if($OtherParameters -ne $null){
-        ForEach($Option in $OtherParameters.Keys){
-            $QueryString = $QueryString + " " + $Option + " " + $OtherParameters[$Option]
-        }
-    }
 
     # Check if Already Exists
     $scriptBlock = [Scriptblock]::Create($CheckInstallString)
@@ -105,7 +60,14 @@ function Install-Package-Command-String {
 
     Logger -Message "Package: $Package"
 
-    if($exists.Contains($NotInstalledString)){
+    if($exists.Contains($NotInstalledString)){    
+        # Add Default Installer Parameters
+        if($OtherParameters -ne $null){
+            ForEach($Option in $OtherParameters.Keys){
+                $QueryString = $QueryString + " " + $Option + " " + $OtherParameters[$Option]
+            }
+        }
+        
         # Install
         $InstallString = "winget install " + $QueryString
         $message = "`tCommand: " + $InstallString
@@ -129,18 +91,18 @@ function Install-From-Hashes {
     
     $Jobs = foreach($Package in $Programs.Keys){   
     
-        if($PackageParams[$Package] -eq $null) {
+        if($null -eq $PackageParams[$Package]) {
             $blockstring = Install-Package-Command-String `
                 -Package $Package `
-                -Source $Programs[$Package] `
-                -OtherParameters $DefaultOptionsHash;
+                -SourceNum $Programs[$Package] `
+                -OtherParameters $DefaultOptions;
         }
         else {
             $blockstring = Install-Package-Command-String `
                 -Package $Package `
-                -Source $Programs[$Package] `
+                -SourceNum $Programs[$Package] `
                 -PackageParams $PackageParams[$Package] `
-                -OtherParameters $DefaultOptionsHash;
+                -OtherParameters $DefaultOptions;
         }
 
         $scriptBlock = [Scriptblock]::Create($blockstring);
@@ -156,7 +118,7 @@ function Install-From-Hashes {
         $Output = Receive-Job $Job
     
         # Skipped Install
-        if($Output -eq $null){
+        if($null -eq $Output){
             continue;
         }
         
@@ -177,31 +139,30 @@ function Install-From-Hashes {
     }
 }
 
+########################
+# Install Program Sets #
+########################
+$SetNum = 1
+foreach($Set in $ProgramSets){
+    Logger -Message "Installing Set $SetNum.."
+    Install-From-Hashes -Programs $Set
+    $SetNum += 1
+}
 
-#############################
-# Install Required Programs #
-#############################
-
-Logger -Message "Installing Required Programs.. "
-Install-From-Hashes -Programs $MainPrograms
+Logger -Message "Updating Session PATH.."
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
 
 ############################
 # Install Python Libraries #
 ############################
 
+if($PythonLibs.Length -eq 0){
+    Logger -Message "No Python Libraries Found in Config.. Exiting"
+    exit(1)
+}
+
 Logger -Message "Installing Python Libraries.."
-Logger -Message "Updating Session PATH.."
-
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
-
 Logger -Message "using Pip to install.."
 foreach($PythonLib in $PythonLibs){
     pip install $PythonLib | Logger
 }
-
-##############################
-# Install Secondary Programs #
-##############################
-
-Logger -Message "Installing Secondary Programs.. "
-Install-From-Hashes -Programs $SecondaryPrograms

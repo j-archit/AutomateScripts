@@ -2,3 +2,4 @@
 *.ini
 
 Dir-Sync/config/*
+Install-Winget/config/*
